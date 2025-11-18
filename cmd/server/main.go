@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -24,8 +25,7 @@ func main() {
 	log.Info("server started")
 	defer log.Info("server stopped")
 
-	connectionString := "amqp://guest:guest@localhost:5672/"
-	connection, err := amqp.Dial(connectionString)
+	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Errorf("failed to connect to rabbitmq: %v", err)
 		return
@@ -44,19 +44,58 @@ func main() {
 		log.Errorf("failed to open channel: %v", err)
 		return
 	}
+	defer func() {
+		if err := channel.Close(); err != nil {
+			log.Errorf("failed to close rabbitmq channel: %v", err)
+		} else {
+			log.Info("rabbitmq: channel closed")
+		}
+	}()
+	log.Info("rabbitmq: channel open")
 
-	playingState := routing.PlayingState{IsPaused: true}
-	buf, err := json.Marshal(playingState)
-	if err != nil {
-		log.Errorf("failed to marshal json: %v")
-		return
+	gamelogic.PrintServerHelp()
+	for loop := true; loop; {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+		switch words[0] {
+		case "pause":
+			log.Info("sending pause message")
+			buf, err := json.Marshal(routing.PlayingState{IsPaused: true})
+			if err != nil {
+				log.Errorf("failed to marshal json: %v", err)
+				return
+			}
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, buf)
+			if err != nil {
+				log.Errorf("failed to publish message: %v", err)
+				return
+			}
+			log.Infof("published message: %s", string(buf))
+
+		case "resume":
+			log.Info("sending resume message")
+			buf, err := json.Marshal(routing.PlayingState{IsPaused: false})
+			if err != nil {
+				log.Errorf("failed to marshal json: %v", err)
+				return
+			}
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, buf)
+			if err != nil {
+				log.Errorf("failed to publish message: %v", err)
+				return
+			}
+			log.Infof("published message: %s", string(buf))
+
+		case "quit":
+			log.Info("exiting")
+			loop = false
+
+		default:
+			log.Infof("unexpected command: %s", words[0])
+		}
 	}
-	err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, buf)
-	if err != nil {
-		log.Errorf("failed to publish message: %v", err)
-		return
-	}
-	log.Infof("published message: %s", string(buf))
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
