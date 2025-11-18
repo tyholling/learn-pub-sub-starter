@@ -3,9 +3,7 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -27,12 +25,12 @@ func main() {
 
 	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
-		log.Errorf("failed to connect to rabbitmq: %v", err)
+		log.Errorf("rabbitmq: failed to connect: %v", err)
 		return
 	}
 	defer func() {
 		if err := connection.Close(); err != nil {
-			log.Errorf("failed to close rabbitmq connection: %v", err)
+			log.Errorf("rabbitmq: failed to close connection: %v", err)
 		} else {
 			log.Info("rabbitmq: connection closed")
 		}
@@ -41,12 +39,12 @@ func main() {
 
 	channel, err := connection.Channel()
 	if err != nil {
-		log.Errorf("failed to open channel: %v", err)
+		log.Errorf("rabbitmq: failed to open channel: %v", err)
 		return
 	}
 	defer func() {
 		if err := channel.Close(); err != nil {
-			log.Errorf("failed to close rabbitmq channel: %v", err)
+			log.Errorf("rabbitmq: failed to close channel: %v", err)
 		} else {
 			log.Info("rabbitmq: channel closed")
 		}
@@ -54,7 +52,7 @@ func main() {
 	log.Info("rabbitmq: channel open")
 
 	gamelogic.PrintServerHelp()
-	for loop := true; loop; {
+	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
 			continue
@@ -89,16 +87,10 @@ func main() {
 			log.Infof("published message: %s", string(buf))
 
 		case "quit":
-			log.Info("exiting")
-			loop = false
+			return
 
 		default:
 			log.Infof("unexpected command: %s", words[0])
 		}
 	}
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	defer fmt.Println()
 }
