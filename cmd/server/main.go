@@ -51,6 +51,13 @@ func main() {
 	}()
 	log.Info("rabbitmq: channel open")
 
+	if _, _, err := pubsub.DeclareAndBind(
+		connection, routing.ExchangePerilTopic,
+		routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.QueueDurable,
+	); err != nil {
+		log.Error(err)
+	}
+
 	gamelogic.PrintServerHelp()
 	for {
 		words := gamelogic.GetInput()
