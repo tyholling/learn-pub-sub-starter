@@ -1,3 +1,4 @@
+// server accepts connections from clients
 package main
 
 import (
