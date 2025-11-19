@@ -23,13 +23,13 @@ func main() {
 	log.Info("client started")
 	defer log.Info("client stopped")
 
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Errorf("rabbitmq: failed to connect: %v", err)
 		return
 	}
 	defer func() {
-		if err := conn.Close(); err != nil {
+		if err := connection.Close(); err != nil {
 			log.Errorf("rabbitmq: failed to close connection: %v", err)
 		} else {
 			log.Info("rabbitmq: connection closed")
@@ -37,30 +37,48 @@ func main() {
 	}()
 	log.Info("rabbitmq: connected")
 
+	channel, err := connection.Channel()
+	if err != nil {
+		log.Errorf("rabbitmq: failed to open channel: %v", err)
+		return
+	}
+	defer func() {
+		if err := channel.Close(); err != nil {
+			log.Errorf("rabbitmq: failed to close channel: %v", err)
+		} else {
+			log.Info("rabbitmq: channel closed")
+		}
+	}()
+	log.Info("rabbitmq: channel open")
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Errorf("failed to get username: %v", err)
 		return
 	}
-
-	queueName := "pause." + username
-	_, _, err = pubsub.DeclareAndBind(
-		conn, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.QueueTransient)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
 	gameState := gamelogic.NewGameState(username)
+
+	// subscribe to pause events
 	if err := pubsub.SubscribeJSON(
-		conn, routing.ExchangePerilDirect, queueName,
+		connection, routing.ExchangePerilDirect,
+		(routing.PauseKey + "." + username),
 		routing.PauseKey, pubsub.QueueTransient, handlerPause(gameState),
 	); err != nil {
 		log.Error(err)
 		return
 	}
 
-	gamelogic.PrintClientHelp()
+	// subscribe to army_moves.* events
+	if err := pubsub.SubscribeJSON(
+		connection, routing.ExchangePerilTopic,
+		(routing.ArmyMovesPrefix + "." + username),
+		(routing.ArmyMovesPrefix + ".*"), pubsub.QueueTransient, handlerMove(gameState),
+	); err != nil {
+		log.Error(err)
+		return
+	}
+
+	// gamelogic.PrintClientHelp()
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -73,8 +91,20 @@ func main() {
 			}
 
 		case "move":
-			if _, err := gameState.CommandMove(words); err != nil {
+			move, err := gameState.CommandMove(words)
+			if err != nil {
 				log.Errorf("failed to move: %v", err)
+				break
+			}
+			log.Info("sending move message")
+			routingKey := routing.ArmyMovesPrefix + "." + username
+			if err = pubsub.PublishJSON(
+				channel, routing.ExchangePerilTopic, routingKey, move,
+			); err != nil {
+				log.Errorf("failed to publish message: %v", err)
+				break
+			} else {
+				log.Info("published move")
 			}
 
 		case "status":
@@ -100,5 +130,12 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
 	return func(ps routing.PlayingState) {
 		defer fmt.Print("> ")
 		gs.HandlePause(ps)
+	}
+}
+
+func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) {
+	return func(move gamelogic.ArmyMove) {
+		defer fmt.Print("> ")
+		gs.HandleMove(move)
 	}
 }

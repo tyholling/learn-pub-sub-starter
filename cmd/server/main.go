@@ -52,12 +52,12 @@ func main() {
 
 	if _, _, err := pubsub.DeclareAndBind(
 		connection, routing.ExchangePerilTopic,
-		routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.QueueDurable,
+		routing.GameLogSlug, (routing.GameLogSlug + ".*"), pubsub.QueueDurable,
 	); err != nil {
 		log.Error(err)
 	}
 
-	gamelogic.PrintServerHelp()
+	// gamelogic.PrintServerHelp()
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -66,19 +66,20 @@ func main() {
 		switch words[0] {
 		case "pause":
 			log.Info("sending pause message")
-			err = pubsub.PublishJSON(
+			if err = pubsub.PublishJSON(
 				channel, routing.ExchangePerilDirect, routing.PauseKey,
-				routing.PlayingState{IsPaused: true})
-			if err != nil {
+				routing.PlayingState{IsPaused: true},
+			); err != nil {
 				log.Errorf("failed to publish message: %v", err)
 				return
 			}
 
 		case "resume":
 			log.Info("sending resume message")
-			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey,
-				routing.PlayingState{IsPaused: false})
-			if err != nil {
+			if err = pubsub.PublishJSON(
+				channel, routing.ExchangePerilDirect, routing.PauseKey,
+				routing.PlayingState{IsPaused: false},
+			); err != nil {
 				log.Errorf("failed to publish message: %v", err)
 				return
 			}
