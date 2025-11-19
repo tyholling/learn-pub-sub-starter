@@ -1,3 +1,4 @@
+// Package pubsub has publish/subscribe functions
 package pubsub
 
 import (
@@ -5,8 +6,10 @@ import (
 	"encoding/json"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	log "github.com/sirupsen/logrus"
 )
 
+// PublishJSON sends a message to a channel
 func PublishJSON[T any](channel *amqp.Channel, exchange, key string, val T) error {
 	buf, err := json.Marshal(val)
 	if err != nil {
@@ -29,8 +32,10 @@ const (
 	QueueTransient
 )
 
-func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queueType QueueType) (
-	*amqp.Channel, amqp.Queue, error) {
+// DeclareAndBind creates a queue and binds it to a channel
+func DeclareAndBind(
+	conn *amqp.Connection, exchange, queueName, key string, queueType QueueType,
+) (*amqp.Channel, amqp.Queue, error) {
 
 	channel, err := conn.Channel()
 	if err != nil {
@@ -45,7 +50,37 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 
 	if err := channel.QueueBind(queue.Name, key, exchange, false, amqp.Table{}); err != nil {
 		return nil, amqp.Queue{}, err
-	} else {
-		return channel, queue, nil
 	}
+	return channel, queue, nil
+}
+
+// SubscribeJSON consumes messages from a queue
+func SubscribeJSON[T any](
+	conn *amqp.Connection, exchange, queueName, key string,
+	queueType QueueType, handler func(T),
+) error {
+	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+	ch, err := channel.Consume(queue.Name, "", false, false, false, false, amqp.Table{})
+	if err != nil {
+		return err
+	}
+	go func() {
+		for msg := range ch {
+			var val T
+			if err := json.Unmarshal(msg.Body, &val); err != nil {
+				log.Errorf("failed to unmarshal %T to %T", msg.Body, val)
+				log.Error(err)
+			}
+			log.Infof("received message: %s", string(msg.Body))
+			handler(val)
+			if err := msg.Ack(false); err != nil {
+				log.Error(err)
+			}
+		}
+	}()
+
+	return nil
 }

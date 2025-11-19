@@ -52,6 +52,13 @@ func main() {
 	}
 
 	gameState := gamelogic.NewGameState(username)
+	if err := pubsub.SubscribeJSON(
+		conn, routing.ExchangePerilDirect, queueName,
+		routing.PauseKey, pubsub.QueueTransient, handlerPause(gameState),
+	); err != nil {
+		log.Error(err)
+		return
+	}
 
 	gamelogic.PrintClientHelp()
 	for {
@@ -86,5 +93,12 @@ func main() {
 		default:
 			log.Infof("unexpected command: %s", words[0])
 		}
+	}
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(ps)
 	}
 }

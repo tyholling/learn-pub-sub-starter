@@ -2,7 +2,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
@@ -67,31 +66,22 @@ func main() {
 		switch words[0] {
 		case "pause":
 			log.Info("sending pause message")
-			buf, err := json.Marshal(routing.PlayingState{IsPaused: true})
-			if err != nil {
-				log.Errorf("failed to marshal json: %v", err)
-				return
-			}
-			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, buf)
+			err = pubsub.PublishJSON(
+				channel, routing.ExchangePerilDirect, routing.PauseKey,
+				routing.PlayingState{IsPaused: true})
 			if err != nil {
 				log.Errorf("failed to publish message: %v", err)
 				return
 			}
-			log.Infof("published message: %s", string(buf))
 
 		case "resume":
 			log.Info("sending resume message")
-			buf, err := json.Marshal(routing.PlayingState{IsPaused: false})
-			if err != nil {
-				log.Errorf("failed to marshal json: %v", err)
-				return
-			}
-			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, buf)
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey,
+				routing.PlayingState{IsPaused: false})
 			if err != nil {
 				log.Errorf("failed to publish message: %v", err)
 				return
 			}
-			log.Infof("published message: %s", string(buf))
 
 		case "quit":
 			return
