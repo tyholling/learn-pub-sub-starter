@@ -57,7 +57,7 @@ func main() {
 		log.Error(err)
 	}
 
-	// gamelogic.PrintServerHelp()
+	gamelogic.PrintServerHelp()
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {

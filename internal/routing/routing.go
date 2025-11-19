@@ -1,16 +1,14 @@
 package routing
 
 const (
-	ArmyMovesPrefix = "army_moves"
-
+	ArmyMovesPrefix       = "army_moves"
 	WarRecognitionsPrefix = "war"
-
-	PauseKey = "pause"
-
-	GameLogSlug = "game_logs"
+	PauseKey              = "pause"
+	GameLogSlug           = "game_logs"
 )
 
 const (
-	ExchangePerilDirect = "peril_direct"
-	ExchangePerilTopic  = "peril_topic"
+	ExchangePerilDirect     = "peril_direct"
+	ExchangePerilTopic      = "peril_topic"
+	ExchangePerilDeadLetter = "peril_dlx"
 )
