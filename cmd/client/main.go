@@ -151,8 +151,8 @@ func handlerMove(gs *gamelogic.GameState, channel *amqp.Channel,
 		if outcome == gamelogic.MoveOutcomeMakeWar {
 			if err := pubsub.PublishJSON(
 				channel, routing.ExchangePerilTopic,
-				(routing.WarRecognitionsPrefix + "." + gs.Player.Username),
-				gamelogic.RecognitionOfWar{Attacker: move.Player, Defender: gs.Player},
+				(routing.WarRecognitionsPrefix + "." + move.Player.Username),
+				gamelogic.RecognitionOfWar{Attacker: gs.Player, Defender: move.Player},
 			); err != nil {
 				log.Error(err)
 				return pubsub.NackRequeue
