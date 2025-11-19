@@ -155,8 +155,9 @@ func handlerMove(gs *gamelogic.GameState, channel *amqp.Channel,
 				gamelogic.RecognitionOfWar{Attacker: move.Player, Defender: gs.Player},
 			); err != nil {
 				log.Error(err)
+				return pubsub.NackRequeue
 			}
-			return pubsub.NackRequeue
+			return pubsub.Ack
 		}
 		if outcome == gamelogic.MoveOutComeSafe {
 			return pubsub.Ack
