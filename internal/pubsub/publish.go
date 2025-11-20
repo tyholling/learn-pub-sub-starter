@@ -2,7 +2,9 @@
 package pubsub
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -25,7 +27,7 @@ const (
 	NackDiscard
 )
 
-// PublishJSON sends a message to a channel
+// PublishJSON sends a json message to a channel
 func PublishJSON[T any](channel *amqp.Channel, exchange, key string, val T) error {
 	buf, err := json.Marshal(val)
 	if err != nil {
@@ -34,6 +36,21 @@ func PublishJSON[T any](channel *amqp.Channel, exchange, key string, val T) erro
 	msg := amqp.Publishing{
 		ContentType: "application/json",
 		Body:        buf,
+	}
+	return channel.PublishWithContext(context.Background(), exchange, key, false, false, msg)
+}
+
+// PublishGob sends a gob message to a channel
+func PublishGob[T any](channel *amqp.Channel, exchange, key string, val T) error {
+	buffer := bytes.Buffer{}
+	encoder := gob.NewEncoder(&buffer)
+
+	if err := encoder.Encode(val); err != nil {
+		return err
+	}
+	msg := amqp.Publishing{
+		ContentType: "application/gob",
+		Body:        buffer.Bytes(),
 	}
 	return channel.PublishWithContext(context.Background(), exchange, key, false, false, msg)
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -82,7 +83,7 @@ func main() {
 	if err := pubsub.SubscribeJSON(
 		connection, routing.ExchangePerilTopic,
 		routing.WarRecognitionsPrefix, (routing.WarRecognitionsPrefix + "." + username),
-		pubsub.QueueDurable, handlerWar(gameState),
+		pubsub.QueueDurable, handlerWar(gameState, channel),
 	); err != nil {
 		log.Error(err)
 		return
@@ -166,17 +167,36 @@ func handlerMove(gs *gamelogic.GameState, channel *amqp.Channel,
 	}
 }
 
-func handlerWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub.AckType {
+func publishGameLog(channel *amqp.Channel, username string, gl routing.GameLog) pubsub.AckType {
+	if err := pubsub.PublishGob(
+		channel, routing.ExchangePerilTopic, (routing.GameLogSlug + "." + username), gl,
+	); err != nil {
+		log.Error(err)
+		return pubsub.NackRequeue
+	}
+	return pubsub.Ack
+}
+
+func handlerWar(gs *gamelogic.GameState, channel *amqp.Channel,
+) func(gamelogic.RecognitionOfWar) pubsub.AckType {
 	return func(rw gamelogic.RecognitionOfWar) pubsub.AckType {
 		defer fmt.Print("> ")
-		outcome, _, _ := gs.HandleWar(rw)
+		outcome, winner, loser := gs.HandleWar(rw)
 		switch outcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard
-		case gamelogic.WarOutcomeOpponentWon, gamelogic.WarOutcomeYouWon, gamelogic.WarOutcomeDraw:
-			return pubsub.Ack
+		case gamelogic.WarOutcomeOpponentWon, gamelogic.WarOutcomeYouWon:
+			message := winner + " won a war against " + loser
+			return publishGameLog(channel, gs.Player.Username, routing.GameLog{
+				CurrentTime: time.Now(), Message: message, Username: gs.Player.Username,
+			})
+		case gamelogic.WarOutcomeDraw:
+			message := "A war between " + winner + " and " + loser + " resulted in a draw"
+			return publishGameLog(channel, gs.Player.Username, routing.GameLog{
+				CurrentTime: time.Now(), Message: message, Username: gs.Player.Username,
+			})
 		default:
 			log.Errorf("unexpected outcome: %v", outcome)
 			return pubsub.NackDiscard
