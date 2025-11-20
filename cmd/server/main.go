@@ -51,14 +51,12 @@ func main() {
 	}()
 	log.Info("rabbitmq: channel open")
 
-	/*
-		if _, _, err := pubsub.DeclareAndBind(
-			connection, routing.ExchangePerilTopic,
-			routing.GameLogSlug, (routing.GameLogSlug + ".*"), pubsub.QueueDurable,
-		); err != nil {
-			log.Error(err)
-		}
-	*/
+	if _, _, err := pubsub.DeclareAndBind(
+		connection, routing.ExchangePerilTopic,
+		routing.GameLogSlug, (routing.GameLogSlug + ".*"), pubsub.QueueDurable,
+	); err != nil {
+		log.Error(err)
+	}
 
 	// subscribe to game logs
 	if err := pubsub.SubscribeGob(
