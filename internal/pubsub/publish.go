@@ -125,3 +125,53 @@ func SubscribeJSON[T any](
 
 	return nil
 }
+
+// SubscribeGob consumes messages from a queue
+func SubscribeGob[T any](
+	conn *amqp.Connection, exchange, queueName, key string,
+	queueType QueueType, handler func(T) AckType,
+) error {
+	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+	ch, err := channel.Consume(queue.Name, "", false, false, false, false, amqp.Table{})
+	if err != nil {
+		return err
+	}
+	go func() {
+		for msg := range ch {
+			var val T
+			buffer := bytes.NewBuffer(msg.Body)
+			decoder := gob.NewDecoder(buffer)
+			if err := decoder.Decode(&val); err != nil {
+				log.Error(err)
+				continue
+			}
+			switch handler(val) {
+			case Ack:
+				if err := msg.Ack(false); err != nil {
+					log.Error(err)
+				} else {
+					log.Infof("ack: %s", msg.Body)
+				}
+
+			case NackRequeue:
+				if err := msg.Nack(false, true); err != nil {
+					log.Error(err)
+				} else {
+					log.Infof("nack requeue: %s", msg.Body)
+				}
+
+			case NackDiscard:
+				if err := msg.Nack(false, false); err != nil {
+					log.Error(err)
+				} else {
+					log.Infof("nack discard: %s", msg.Body)
+				}
+			}
+		}
+	}()
+
+	return nil
+}

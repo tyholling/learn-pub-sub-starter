@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
@@ -50,11 +51,22 @@ func main() {
 	}()
 	log.Info("rabbitmq: channel open")
 
-	if _, _, err := pubsub.DeclareAndBind(
+	/*
+		if _, _, err := pubsub.DeclareAndBind(
+			connection, routing.ExchangePerilTopic,
+			routing.GameLogSlug, (routing.GameLogSlug + ".*"), pubsub.QueueDurable,
+		); err != nil {
+			log.Error(err)
+		}
+	*/
+
+	// subscribe to game logs
+	if err := pubsub.SubscribeGob(
 		connection, routing.ExchangePerilTopic,
-		routing.GameLogSlug, (routing.GameLogSlug + ".*"), pubsub.QueueDurable,
+		routing.GameLogSlug, (routing.GameLogSlug + ".*"),
+		pubsub.QueueDurable, handleLog(),
 	); err != nil {
-		log.Error(err)
+		log.Fatal(err)
 	}
 
 	gamelogic.PrintServerHelp()
@@ -90,5 +102,15 @@ func main() {
 		default:
 			log.Infof("unexpected command: %s", words[0])
 		}
+	}
+}
+
+func handleLog() func(routing.GameLog) pubsub.AckType {
+	return func(gl routing.GameLog) pubsub.AckType {
+		defer fmt.Print("> ")
+		if err := gamelogic.WriteLog(gl); err != nil {
+			log.Errorf("failed to write log: %v", err)
+		}
+		return pubsub.Ack
 	}
 }
